@@ -1,88 +1,79 @@
 #!/bin/bash
 
-# VULN_SERVER_SETUP - Fully Automated Vulnerable Pentest Lab
-# Supports Linux-based systems with Docker installed
+set -e  # Stop on any error
 
-echo "[*] Checking for Docker..."
+echo -e "\n🔥 Ultimate Automated Attack Lab Deployment 🔥\n"
+
+# Detect OS
+OS=$(uname -s)
+echo "[+] Detected OS: $OS"
+
+# Ensure Docker is installed
 if ! command -v docker &>/dev/null; then
-    echo "[!] Docker is not installed! Installing now..."
-    sudo apt update && sudo apt install -y docker.io
-    sudo systemctl enable --now docker
+    echo "[!] Docker is not installed. Installing now..."
+    if [[ "$OS" == "Linux" ]]; then
+        sudo apt update && sudo apt install -y docker.io
+    elif [[ "$OS" == "Darwin" ]]; then
+        brew install --cask docker
+    else
+        echo "[!] Unsupported OS. Install Docker manually."
+        exit 1
+    fi
 fi
 
-echo "[*] Pulling vulnerable Docker images..."
-docker pull vulnerables/web-dvwa
-docker pull citizenstig/nowasp
-docker pull vulnerables/cve-2017-5638
-docker pull vulnerables/metasploitable2
-docker pull raesene/bwapp
-docker pull opendns/security-ninjas
-docker pull diogomonica/docker-bench-security
-docker pull vulnerablewordpress/latest
-docker pull vulnerables/exploit-db
-docker pull cyberxsecurity/psa-lab  # PrintNightmare
-docker pull cyberxsecurity/eternalblue-vulnerable  # MS17-010
-docker pull public.ecr.aws/smugglers/log4shell-vulnerable-app  # Log4Shell
+# Pull and deploy vulnerable web apps
+echo "[+] Deploying Vulnerable Web Apps..."
+docker network create pentest-lab || true
 
-echo "[*] Creating Docker network: vulnnet"
-docker network create vulnnet
+docker run -d --name dvwa --network pentest-lab -p 8081:80 vulnerables/web-dvwa
+docker run -d --name juiceshop --network pentest-lab -p 8082:3000 bkimminich/juice-shop
+docker run -d --name mutillidae --network pentest-lab -p 8083:80 citizenstig/nowasp
 
-echo "[*] Deploying vulnerable web apps..."
-docker run -d --name dvwa --network vulnnet -p 8081:80 vulnerables/web-dvwa
-docker run -d --name mutillidae --network vulnnet -p 8082:80 citizenstig/nowasp
-docker run -d --name struts2-exploit --network vulnnet -p 8083:8080 vulnerables/cve-2017-5638
-docker run -d --name bwapp --network vulnnet -p 8084:80 raesene/bwapp
-docker run -d --name security-ninjas --network vulnnet -p 8085:80 opendns/security-ninjas
-docker run -d --name wordpress-vuln --network vulnnet -p 8086:80 vulnerablewordpress/latest
-docker run -d --name exploit-db --network vulnnet -p 8087:80 vulnerables/exploit-db
+# Deploy misconfigured services
+echo "[+] Deploying Vulnerable Network Services..."
+docker run -d --name smb-vuln --network pentest-lab -p 445:445 cyberxsecurity/smb-vuln
+docker run -d --name ftp-vuln --network pentest-lab -p 21:21 stilliard/pure-ftpd:hardened
+docker run -d --name ssh-vuln --network pentest-lab -p 2222:22 vulnerables/cve-2018-15473
+docker run -d --name telnet-vuln --network pentest-lab -p 23:23 vimagick/telnetd
 
-echo "[*] Deploying vulnerable services..."
-docker run -d --name metasploitable --network vulnnet -p 2222:22 -p 445:445 -p 3389:3389 -p 23:23 -p 21:21 vulnerables/metasploitable2
-docker run -d --name ldap --network vulnnet -p 389:389 osixia/openldap
-docker run -d --name log4shell --network vulnnet -p 8088:8080 public.ecr.aws/smugglers/log4shell-vulnerable-app
-docker run -d --name eternalblue --network vulnnet -p 445:445 cyberxsecurity/eternalblue-vulnerable
-docker run -d --name printnightmare --network vulnnet -p 9100:9100 cyberxsecurity/psa-lab
+# Deploy Windows Active Directory (Requires Windows Server ISO)
+echo "[+] Deploying Windows Server 2019 with Active Directory..."
+if [[ "$OS" == "Linux" ]]; then
+    docker run -d --name win-ad --network pentest-lab -p 3389:3389 -p 389:389 \
+        --env ADMIN_PASSWORD="P@ssw0rd!" \
+        --env DOMAIN="attacklab.local" \
+        --env ROLE="dc" \
+        --restart unless-stopped \
+        aresx/adlab
+fi
 
-echo "[*] Deploying exploitable databases..."
-docker run -d --name mysql-vuln --network vulnnet -p 3306:3306 -e MYSQL_ROOT_PASSWORD=root mysql:5.7
-docker run -d --name postgres-vuln --network vulnnet -p 5432:5432 -e POSTGRES_PASSWORD=postgres postgres:9.6
-docker run -d --name mongo-vuln --network vulnnet -p 27017:27017 mongo:latest
+# Deploy Red Team & Attack Tools
+echo "[+] Deploying Red Team Tools..."
+docker run -d --name metasploit --network pentest-lab -p 4444:4444 metasploitframework/metasploit-framework
+docker run -d --name empire --network pentest-lab -p 1337:1337 bcsecurity/empire
+docker run -d --name covenant --network pentest-lab -p 7443:7443 cobbr/covenant
 
-echo "[*] Deploying SMTP server with open relay..."
-docker run -d --name smtp-vuln --network vulnnet -p 25:25 namshi/smtp
+# Deploy Automated Attack Simulation
+echo "[+] Deploying Automated Attack Simulations..."
+docker run -d --name bloodhound --network pentest-lab -p 7687:7687 -p 7474:7474 specterops/bloodhound
+docker run -d --name caldera --network pentest-lab -p 8888:8888 mitre/caldera
 
-echo "[*] Deploying security benchmarking tools..."
-docker run -d --name docker-bench-security --network vulnnet diogomonica/docker-bench-security
+# Deploy AWS/Azure Misconfiguration Labs
+echo "[+] Deploying Cloud Security Labs..."
+docker run -d --name cloudgoat --network pentest-lab rhisecurity/cloudgoat
+docker run -d --name flaws2 --network pentest-lab flaws2/flaws2
 
-echo "[+] Vulnerable services running:"
-docker ps --format "table {{.Names}}\t{{.Ports}}"
+# Deploy Web-Based Control Panel (optional)
+echo "[+] Deploying Web Control Panel..."
+docker run -d --name controlpanel --network pentest-lab -p 5000:5000 pentestlab/controlpanel
 
-echo "[+] Setup complete! Access web apps on:"
-echo "    - DVWA: http://localhost:8081"
-echo "    - Mutillidae: http://localhost:8082"
-echo "    - Struts2: http://localhost:8083"
-echo "    - bWAPP: http://localhost:8084"
-echo "    - Security Ninjas: http://localhost:8085"
-echo "    - WordPress Vuln: http://localhost:8086"
-echo "    - Exploit-DB: http://localhost:8087"
-echo "    - Log4Shell Test: http://localhost:8088"
-echo ""
-echo "[+] Vulnerable services:"
-echo "    - Metasploitable2 (Multiple services, weak creds)"
-echo "    - LDAP: ldap://localhost:389"
-echo "    - Open SMTP: smtp://localhost:25 (No Auth!)"
-echo "    - MySQL: mysql://localhost:3306 (root/root)"
-echo "    - PostgreSQL: postgres://localhost:5432 (postgres/postgres)"
-echo "    - MongoDB: mongo://localhost:27017 (No Auth)"
-echo "    - EternalBlue SMB: \\localhost\share"
-echo "    - PrintNightmare Exploit: nc localhost 9100"
-echo ""
-
-echo "[+] Start Metasploit with:"
-echo "    msfconsole -q -x 'db_connect postgres:postgres@127.0.0.1/msf'"
-echo "    msf > use exploit/multi/samba/usermap_script"
-echo "    msf > set RHOSTS 127.0.0.1"
-echo "    msf > exploit"
-
-echo "[+] To reset the lab, run:"
-echo "    docker stop \$(docker ps -q) && docker rm \$(docker ps -aq)"
+echo -e "\n✅ Deployment Complete! Access your attack lab:\n"
+echo "  DVWA:          http://localhost:8081"
+echo "  Juice Shop:    http://localhost:8082"
+echo "  Mutillidae:    http://localhost:8083"
+echo "  Metasploit:    docker exec -it metasploit msfconsole"
+echo "  Empire:        docker exec -it empire powershell"
+echo "  BloodHound:    http://localhost:7474"
+echo "  Windows AD:    RDP to localhost:3389 (user: Administrator, pass: P@ssw0rd!)"
+echo "  Control Panel: http://localhost:5000"
+echo -e "\n🚀 Happy Hacking!"
