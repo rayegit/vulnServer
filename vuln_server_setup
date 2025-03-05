@@ -1,0 +1,57 @@
+#!/bin/bash
+
+# VULN_SERVER_SETUP - Docker-based Exploitable Server Setup
+# Supports Linux-based systems with Docker installed
+
+# Ensure Docker is installed
+if ! command -v docker &>/dev/null; then
+    echo "[!] Docker is not installed! Installing now..."
+    sudo apt update && sudo apt install -y docker.io
+    sudo systemctl enable --now docker
+fi
+
+# Pull necessary images
+echo "[*] Pulling vulnerable Docker images..."
+docker pull vulnerables/web-dvwa
+docker pull citizenstig/nowasp
+docker pull vulnerables/cve-2017-5638
+docker pull vulnerables/metasploitable2
+docker pull raesene/bwapp
+docker pull opendns/security-ninjas
+docker pull diogomonica/docker-bench-security
+
+# Create a Docker network
+echo "[*] Creating isolated Docker network: vulnnet"
+docker network create vulnnet
+
+# Deploy Web Apps
+echo "[*] Deploying vulnerable web apps..."
+docker run -d --name dvwa --network vulnnet -p 8081:80 vulnerables/web-dvwa
+docker run -d --name mutillidae --network vulnnet -p 8082:80 citizenstig/nowasp
+docker run -d --name struts2-exploit --network vulnnet -p 8083:8080 vulnerables/cve-2017-5638
+docker run -d --name bwapp --network vulnnet -p 8084:80 raesene/bwapp
+docker run -d --name security-ninjas --network vulnnet -p 8085:80 opendns/security-ninjas
+
+# Deploy Vulnerable Services
+echo "[*] Deploying exploitable services..."
+docker run -d --name metasploitable --network vulnnet -p 2222:22 -p 445:445 -p 3389:3389 -p 23:23 -p 21:21 vulnerables/metasploitable2
+
+# Deploy Security Audit Tools
+echo "[*] Deploying security benchmarking tools..."
+docker run -d --name docker-bench-security --network vulnnet diogomonica/docker-bench-security
+
+# Display Running Services
+echo "[+] Vulnerable services running:"
+docker ps --format "table {{.Names}}\t{{.Ports}}"
+
+echo "[+] Setup complete! Access web apps on:"
+echo "    - DVWA: http://localhost:8081"
+echo "    - Mutillidae: http://localhost:8082"
+echo "    - Struts2: http://localhost:8083"
+echo "    - bWAPP: http://localhost:8084"
+echo "    - Security Ninjas: http://localhost:8085"
+echo "    - Metasploitable (SSH, FTP, Telnet, RDP, SMB):"
+echo "      SSH: ssh user@localhost -p 2222"
+echo "      FTP: ftp localhost"
+echo "      Telnet: telnet localhost"
+echo "      SMB: smbclient -L //localhost"
